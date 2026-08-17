@@ -38,7 +38,7 @@ export function LogoutButton() {
       type="button"
       onClick={handleLogout}
       disabled={loading}
-      className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-white/30 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
     >
       <LogOut className="h-4 w-4" />
       {loading ? "Saindo..." : "Sair"}

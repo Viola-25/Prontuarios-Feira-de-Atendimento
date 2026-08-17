@@ -1,7 +1,12 @@
 "use client";
 
 import { createClient } from "@/utils/supabase/client";
-import { inputClass, labelClass } from "@/components/field-classes";
+import {
+  btnPrimary,
+  cardClass,
+  inputClass,
+  labelClass,
+} from "@/components/field-classes";
 import { CheckCircle2, Loader2, PenLine } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -10,12 +15,14 @@ type Props = {
   recordId: string;
   initialPlan: string;
   isCompleted: boolean;
+  isCancelled: boolean;
 };
 
 export function CompleteRecordForm({
   recordId,
   initialPlan,
   isCompleted,
+  isCancelled,
 }: Props) {
   const [plan, setPlan] = useState(initialPlan);
   const [loading, setLoading] = useState(false);
@@ -47,7 +54,12 @@ export function CompleteRecordForm({
       );
 
       if (rpcError) {
-        throw new Error("Erro ao finalizar o atendimento. Tente novamente.");
+        throw new Error(
+          rpcError.message.includes("cancelado") ||
+            rpcError.message.includes("indisponível")
+            ? rpcError.message
+            : "Erro ao finalizar o atendimento. Tente novamente."
+        );
       }
 
       setSuccess(true);
@@ -60,23 +72,39 @@ export function CompleteRecordForm({
 
   if (isCompleted) {
     return (
-      <section className="mt-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
-        <h2 className="mb-3 text-base font-semibold text-gray-900">
+      <section className={`${cardClass} mt-4 p-4 sm:p-5`}>
+        <h2 className="mb-3 text-base font-semibold text-slate-900">
           Conduta / Plano Terapêutico
         </h2>
-        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        <p className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
           Este atendimento já foi finalizado.
         </p>
-        <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-gray-800">
+        <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-slate-800">
           {plan || "—"}
         </p>
       </section>
     );
   }
 
+  if (isCancelled) {
+    return (
+      <section className={`${cardClass} mt-4 p-4 sm:p-5`}>
+        <h2 className="mb-3 text-base font-semibold text-slate-900">
+          Conduta / Plano Terapêutico
+        </h2>
+        <p className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-600">
+          <PenLine className="h-4 w-4 shrink-0" />
+          Este atendimento foi cancelado pelo aluno e não está mais
+          disponível para finalização.
+        </p>
+      </section>
+    );
+  }
+
   return (
-    <section className="mt-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
-      <h2 className="mb-3 text-base font-semibold text-gray-900">
+    <section className={`${cardClass} mt-4 p-4 sm:p-5`}>
+      <h2 className="mb-3 text-base font-semibold text-slate-900">
         Conduta / Plano Terapêutico
       </h2>
 
@@ -100,7 +128,7 @@ export function CompleteRecordForm({
         {error && (
           <p
             role="alert"
-            className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+            className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700"
           >
             {error}
           </p>
@@ -110,24 +138,20 @@ export function CompleteRecordForm({
           <div className="space-y-2">
             <p
               role="status"
-              className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700"
+              className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-3 py-2.5 text-sm text-green-700"
             >
               <CheckCircle2 className="h-4 w-4" />
               Atendimento assinado e finalizado com sucesso!
             </p>
             <Link
               href="/doctor/dashboard"
-              className="block w-full rounded-md border border-teal-700 px-4 py-3 text-center text-base font-semibold text-teal-700 transition-colors hover:bg-teal-50"
+              className="block w-full rounded-xl border border-teal-600 px-4 py-3 text-center text-base font-semibold text-teal-700 transition hover:bg-teal-50"
             >
               Voltar ao dashboard
             </Link>
           </div>
         ) : (
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex w-full items-center justify-center gap-2 rounded-md bg-teal-700 px-4 py-3.5 text-base font-semibold text-white transition-colors hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-60"
-          >
+          <button type="submit" disabled={loading} className={`${btnPrimary} w-full`}>
             {loading ? (
               <Loader2 className="h-5 w-5 animate-spin" />
             ) : (

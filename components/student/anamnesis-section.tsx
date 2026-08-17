@@ -1,44 +1,8 @@
 import { FormSection } from "./form-section";
 import { inputClass, labelClass } from "@/components/field-classes";
+import { ANMNESIS_LABELS, type AnamnesisData } from "./anamnesis-data";
 
-export type AnamnesisData = {
-  chiefComplaint: string;
-  hma: string;
-  hmp: string;
-  medications: string;
-};
-
-const FIELDS: Array<{
-  key: keyof AnamnesisData;
-  label: string;
-  placeholder: string;
-  rows: number;
-}> = [
-  {
-    key: "chiefComplaint",
-    label: "Queixa Principal",
-    placeholder: "Motivo da consulta em poucas palavras...",
-    rows: 3,
-  },
-  {
-    key: "hma",
-    label: "HMA — História da Moléstia Atual",
-    placeholder: "Evolução do quadro atual...",
-    rows: 5,
-  },
-  {
-    key: "hmp",
-    label: "HMP — História Médica Pregressa",
-    placeholder: "Doenças prévias, cirurgias, alergias...",
-    rows: 5,
-  },
-  {
-    key: "medications",
-    label: "Medicamentos em Uso",
-    placeholder: "Medicamentos, doses e posologia...",
-    rows: 4,
-  },
-];
+export type { AnamnesisData } from "./anamnesis-data";
 
 export function AnamnesisSection({
   value,
@@ -50,7 +14,7 @@ export function AnamnesisSection({
   return (
     <FormSection title="Anamnese">
       <div className="space-y-4">
-        {FIELDS.map((field) => (
+        {ANMNESIS_LABELS.map((field) => (
           <div key={field.key}>
             <label htmlFor={field.key} className={labelClass}>
               {field.label}

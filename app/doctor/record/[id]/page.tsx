@@ -1,5 +1,9 @@
 import { CompleteRecordForm } from "@/components/doctor/complete-record-form";
-import { formatCpf } from "@/components/field-classes";
+import {
+  cardClass,
+  formatCpf,
+  pageTitleClass,
+} from "@/components/field-classes";
 import { createClient } from "@/utils/supabase/server";
 import { cookies } from "next/headers";
 import Link from "next/link";
@@ -55,68 +59,66 @@ export default async function DoctorRecordPage({ params }: Props) {
   const studentName = record.profiles?.full_name ?? "—";
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:py-8">
+    <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:py-10">
       <Link
         href="/doctor/dashboard"
-        className="text-sm font-medium text-teal-700 hover:underline"
+        className="inline-flex items-center gap-1.5 rounded-lg text-sm font-medium text-teal-700 transition hover:bg-teal-50 hover:text-teal-800"
       >
-        ← Voltar ao dashboard
+        <span aria-hidden="true">←</span> Voltar ao dashboard
       </Link>
 
-      <h1 className="mt-2 text-xl font-semibold text-gray-900">
-        Atendimento do Paciente
-      </h1>
+      <h1 className={`${pageTitleClass} mt-3`}>Atendimento do Paciente</h1>
 
-      <section className="mt-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
-        <h2 className="mb-3 text-base font-semibold text-gray-900">
+      <section className={`${cardClass} mt-6 p-4 sm:p-5`}>
+        <h2 className="mb-3 text-base font-semibold text-slate-900">
           Dados do Paciente
         </h2>
         <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
           <div>
-            <dt className="text-gray-500">Nome</dt>
-            <dd className="font-medium text-gray-900">
+            <dt className="text-slate-500">Nome</dt>
+            <dd className="font-medium text-slate-900">
               {patient?.name ?? "—"}
             </dd>
           </div>
           <div>
-            <dt className="text-gray-500">Documento</dt>
-            <dd className="font-medium text-gray-900">
+            <dt className="text-slate-500">Documento</dt>
+            <dd className="font-medium text-slate-900">
               {patient?.document_id ? formatCpf(patient.document_id) : "—"}
             </dd>
           </div>
           <div>
-            <dt className="text-gray-500">Data de Nascimento</dt>
-            <dd className="font-medium text-gray-900">
+            <dt className="text-slate-500">Data de Nascimento</dt>
+            <dd className="font-medium text-slate-900">
               {patient?.birth_date ?? "—"}
             </dd>
           </div>
           <div>
-            <dt className="text-gray-500">Telefone</dt>
-            <dd className="font-medium text-gray-900">
+            <dt className="text-slate-500">Telefone</dt>
+            <dd className="font-medium text-slate-900">
               {patient?.phone ?? "—"}
             </dd>
           </div>
           <div className="sm:col-span-2">
-            <dt className="text-gray-500">Aluno responsável</dt>
-            <dd className="font-medium text-gray-900">{studentName}</dd>
+            <dt className="text-slate-500">Aluno responsável</dt>
+            <dd className="font-medium text-slate-900">{studentName}</dd>
           </div>
         </dl>
       </section>
 
-      <section className="mt-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
-        <h2 className="mb-3 text-base font-semibold text-gray-900">
+      <section className={`${cardClass} mt-4 p-4 sm:p-5`}>
+        <h2 className="mb-3 text-base font-semibold text-slate-900">
           Anamnese
         </h2>
-        <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-800">
+        <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800">
           {record.anamnesis || "—"}
         </p>
       </section>
 
-      <section className="mt-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
-        <h2 className="mb-3 text-base font-semibold text-gray-900">
+      <section className={`${cardClass} mt-4 p-4 sm:p-5`}>
+        <h2 className="mb-3 text-base font-semibold text-slate-900">
           Exame Físico
         </h2>
-        <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-800">
+        <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800">
           {record.physical_exam || "—"}
         </p>
       </section>
@@ -125,6 +127,7 @@ export default async function DoctorRecordPage({ params }: Props) {
         recordId={record.id}
         initialPlan={record.management_plan ?? ""}
         isCompleted={record.status === "completed"}
+        isCancelled={record.status === "draft"}
       />
     </div>
   );

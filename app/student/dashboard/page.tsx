@@ -1,4 +1,8 @@
-import { NewAppointmentForm } from "@/components/student/new-appointment-form";
+import {
+  StudentWorkspace,
+  type HistoryRecord,
+  type PendingRecord,
+} from "@/components/student/student-workspace";
 import { createClient } from "@/utils/supabase/server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -15,32 +19,36 @@ export default async function StudentDashboard() {
     redirect("/");
   }
 
-  const { data: activeRecord } = await supabase
+  const { data: pending } = await supabase
     .from("medical_records")
-    .select("id")
+    .select(
+      "id, status, anamnesis, physical_exam, patients(id, name, document_id, birth_date, phone)"
+    )
     .eq("student_id", user.id)
-    .eq("status", "pending")
+    .in("status", ["draft", "pending"])
     .maybeSingle();
 
-  return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:py-8">
-      <h1 className="text-xl font-semibold text-gray-900">
-        Novo Atendimento
-      </h1>
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("full_name")
+    .eq("id", user.id)
+    .maybeSingle();
 
-      {activeRecord ? (
-        <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Você já possui um prontuário ativo aguardando a revisão do
-          preceptor. Aguarde a finalização para criar um novo atendimento.
-        </div>
-      ) : (
-        <>
-          <p className="mb-6 mt-1 text-sm text-gray-600">
-            Preencha os dados do atendimento e envie para o preceptor revisar.
-          </p>
-          <NewAppointmentForm studentId={user.id} />
-        </>
-      )}
-    </div>
+  const { data: history } = await supabase
+    .from("medical_records")
+    .select(
+      "id, created_at, status, anamnesis, physical_exam, management_plan, patients(id, name), profiles!medical_records_doctor_id_fkey(full_name)"
+    )
+    .eq("student_id", user.id)
+    .eq("status", "completed")
+    .order("created_at", { ascending: false });
+
+  return (
+    <StudentWorkspace
+      studentId={user.id}
+      studentName={profile?.full_name ?? null}
+      pendingRecord={pending as PendingRecord | null}
+      history={(history ?? []) as HistoryRecord[]}
+    />
   );
 }

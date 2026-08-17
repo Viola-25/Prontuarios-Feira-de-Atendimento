@@ -1,12 +1,12 @@
 "use client";
 
 import { createClient } from "@/utils/supabase/client";
-import { Search, X } from "lucide-react";
-import { useImperativeHandle, useRef, useState } from "react";
 import { formatCpf, inputClass, labelClass } from "@/components/field-classes";
+import { Search, X } from "lucide-react";
+import { useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { FormSection } from "./form-section";
 
-type Patient = {
+export type Patient = {
   id: string;
   name: string;
   document_id: string | null;
@@ -16,65 +16,89 @@ type Patient = {
 
 export type PatientSectionHandle = {
   resolvePatient: () => Promise<Patient>;
+  selectPatient: (p: Patient) => void;
 };
 
 type Props = {
   ref: React.Ref<PatientSectionHandle>;
+  initialPatient?: Patient | null;
 };
 
-export function PatientSection({ ref }: Props) {
-  const supabase = useRef(createClient()).current;
+export function PatientSection({ ref, initialPatient }: Props) {
+  const supabase = useMemo(() => createClient(), []);
 
-  const [searchCpf, setSearchCpf] = useState("");
+  const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
-  const [searchMessage, setSearchMessage] = useState<string | null>(null);
-  const [patient, setPatient] = useState<Patient | null>(null);
+  const [results, setResults] = useState<Patient[] | null>(null);
+  const [patient, setPatient] = useState<Patient | null>(
+    initialPatient ?? null
+  );
   const [quickReg, setQuickReg] = useState({
     name: "",
     cpf: "",
     birth_date: "",
   });
 
-  async function handleSearch(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const cpf = searchCpf.replace(/\D/g, "");
+  useEffect(() => {
+    if (patient) return;
 
-    if (cpf.length !== 11) {
-      setSearchMessage("Informe um CPF válido com 11 dígitos.");
-      return;
-    }
+    const term = query.trim();
+    let active = true;
 
-    setSearching(true);
-    setSearchMessage(null);
+    const timer = setTimeout(async () => {
+      if (!term) {
+        setSearching(false);
+        setResults(null);
+        return;
+      }
 
-    const { data, error } = await supabase
-      .from("patients")
-      .select("*")
-      .eq("document_id", cpf)
-      .maybeSingle();
+      setSearching(true);
+      const digits = term.replace(/\D/g, "");
+      let queryBuilder;
+      if (digits.length === 11) {
+        queryBuilder = supabase
+          .from("patients")
+          .select("id, name, document_id, birth_date, phone")
+          .eq("document_id", digits);
+      } else {
+        queryBuilder = supabase
+          .from("patients")
+          .select("id, name, document_id, birth_date, phone")
+          .ilike("name", `%${term}%`);
+      }
 
-    setSearching(false);
+      const { data, error } = await queryBuilder.limit(10);
 
-    if (error) {
-      setSearchMessage("Erro ao buscar paciente. Tente novamente.");
-      return;
-    }
+      if (!active) return;
+      setSearching(false);
+      if (error) {
+        setResults([]);
+        return;
+      }
+      setResults((data ?? []) as Patient[]);
+    }, 300);
 
-    if (data) {
-      setPatient(data);
-      setQuickReg((prev) => ({ ...prev, cpf: "" }));
-    } else {
-      setPatient(null);
-      setQuickReg((prev) => ({ ...prev, cpf: formatCpf(cpf) }));
-      setSearchMessage("Paciente não encontrado. Preencha o cadastro rápido abaixo.");
-    }
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [query, patient, supabase]);
+
+  function selectPatientInternal(p: Patient) {
+    setPatient(p);
+    setResults(null);
+    setQuery("");
+    setQuickReg((prev) => ({ ...prev, cpf: "" }));
   }
 
   useImperativeHandle(ref, () => ({
+    selectPatient(p: Patient) {
+      selectPatientInternal(p);
+    },
     async resolvePatient() {
       if (patient) return patient;
 
-      const cpf = (quickReg.cpf || searchCpf).replace(/\D/g, "");
+      const cpf = (quickReg.cpf || query).replace(/\D/g, "");
       if (!quickReg.name.trim() || cpf.length !== 11 || !quickReg.birth_date) {
         throw new Error(
           "Selecione um paciente pela busca ou preencha nome, CPF e data de nascimento no cadastro rápido."
@@ -96,6 +120,7 @@ export function PatientSection({ ref }: Props) {
       }
 
       setPatient(data);
+      setResults(null);
       return data;
     },
   }));
@@ -125,39 +150,58 @@ export function PatientSection({ ref }: Props) {
         </div>
       ) : (
         <div className="space-y-4">
-          <form onSubmit={handleSearch} className="flex gap-2">
-            <div className="min-w-0 flex-1">
-              <label htmlFor="search_cpf" className={labelClass}>
-                Buscar por CPF
-              </label>
-              <input
-                id="search_cpf"
-                type="text"
-                inputMode="numeric"
-                placeholder="000.000.000-00"
-                value={searchCpf}
-                onChange={(e) => setSearchCpf(formatCpf(e.target.value))}
-                className={inputClass}
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={searching}
-              className="mt-6 inline-flex h-[50px] shrink-0 items-center gap-1.5 rounded-md bg-teal-700 px-4 text-sm font-medium text-white transition-colors hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <Search className="h-4 w-4" />
-              {searching ? "..." : "Buscar"}
-            </button>
-          </form>
+          <div>
+            <label htmlFor="patient_query" className={labelClass}>
+              Buscar paciente
+            </label>
+            <input
+              id="patient_query"
+              type="text"
+              placeholder="Digite o nome ou CPF do paciente"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className={inputClass}
+            />
+          </div>
 
-          {searchMessage && (
+          {searching && (
+            <p className="text-sm text-slate-500">Buscando...</p>
+          )}
+
+          {!searching && results !== null && results.length > 0 && (
+            <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200">
+              {results.map((p) => (
+                <li key={p.id}>
+                  <button
+                    type="button"
+                    onClick={() => selectPatientInternal(p)}
+                    className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left transition-colors hover:bg-teal-50"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium text-slate-900">
+                        {p.name}
+                      </span>
+                      <span className="block text-xs text-slate-500">
+                        {p.document_id ? formatCpf(p.document_id) : "—"}
+                        {p.birth_date ? ` · ${p.birth_date}` : ""}
+                      </span>
+                    </span>
+                    <Search className="h-4 w-4 shrink-0 text-slate-400" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {!searching && results !== null && results.length === 0 && (
             <p role="status" className="text-sm text-amber-700">
-              {searchMessage}
+              Nenhum paciente encontrado com esse termo. Use o cadastro
+              rápido abaixo.
             </p>
           )}
 
-          <div className="rounded-md border border-dashed border-gray-300 p-3">
-            <p className="mb-3 text-sm font-medium text-gray-700">
+          <div className="rounded-xl border border-dashed border-slate-300 p-4">
+            <p className="mb-3 text-sm font-semibold text-slate-700">
               Cadastro rápido (paciente novo)
             </p>
             <div className="space-y-3">

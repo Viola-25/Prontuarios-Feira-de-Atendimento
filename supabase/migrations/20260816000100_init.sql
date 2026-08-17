@@ -1,25 +1,17 @@
 -- ============================================================
--- Feira de Saúde - São Camilo | Schema do Supabase (PostgreSQL)
--- Tabelas: profiles, patients, medical_records
--- RLS: alunos criam pacientes e registros 'pending';
---      médicos leem tudo e finalizam registros.
+-- Migration inicial - Feira de Saúde - São Camilo
+-- Idempotente: pode rodar mesmo se objetos já existirem.
 -- ============================================================
 
--- Extensões úteis (gen_random_uuid nativo no Postgres 13+; pgcrypto é redundância segura)
 create extension if not exists "pgcrypto";
 
--- ============================================================
--- 1. PROFILES
--- ============================================================
+-- ---------- TABELAS ----------
 create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   full_name text not null default '',
   role text not null default 'student' check (role in ('student', 'doctor'))
 );
 
--- ============================================================
--- 2. PATIENTS
--- ============================================================
 create table if not exists public.patients (
   id uuid primary key default gen_random_uuid(),
   name text not null,
@@ -28,9 +20,6 @@ create table if not exists public.patients (
   phone text
 );
 
--- ============================================================
--- 3. MEDICAL_RECORDS
--- ============================================================
 create table if not exists public.medical_records (
   id uuid primary key default gen_random_uuid(),
   patient_id uuid not null references public.patients (id) on delete cascade,
@@ -39,26 +28,23 @@ create table if not exists public.medical_records (
   anamnesis text,
   physical_exam text,
   management_plan text,
-  status text not null default 'pending' check (status in ('draft', 'pending', 'completed')),
+  status text not null default 'pending' check (status in ('pending', 'completed')),
   created_at timestamptz not null default now()
 );
 
--- Índices
+-- ---------- ÍNDICES ----------
 create index if not exists medical_records_patient_id_idx on public.medical_records (patient_id);
 create index if not exists medical_records_student_id_idx on public.medical_records (student_id);
 create index if not exists medical_records_doctor_id_idx on public.medical_records (doctor_id);
 create index if not exists medical_records_status_idx on public.medical_records (status);
 create index if not exists patients_document_id_idx on public.patients (document_id);
 
--- Garante no banco que cada aluno tenha no máximo um prontuário ativo
--- (rascunho 'draft' ou enviado 'pending').
+-- Garante no banco que cada aluno tenha no máximo um prontuário ativo (pending).
 create unique index if not exists medical_records_one_pending_per_student
   on public.medical_records (student_id)
-  where status in ('draft', 'pending');
+  where status = 'pending';
 
--- ============================================================
--- Helper: papel do usuário autenticado
--- ============================================================
+-- ---------- FUNÇÕES ----------
 create or replace function public.get_my_role()
 returns text
 language sql
@@ -69,9 +55,6 @@ as $$
   select role from public.profiles where id = auth.uid()
 $$;
 
--- ============================================================
--- Trigger: cria o profile automaticamente no signup
--- ============================================================
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -94,21 +77,19 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
--- ============================================================
--- ROW LEVEL SECURITY
--- ============================================================
-
--- ---------- PROFILES ----------
+-- ---------- RLS ----------
 alter table public.profiles enable row level security;
+alter table public.patients enable row level security;
+alter table public.medical_records enable row level security;
 
--- Cada usuário lê/edita o próprio profile; médico lê todos
--- (necessário para ver o nome do aluno responsável no atendimento).
+-- PROFILES
 drop policy if exists "profiles_select_own" on public.profiles;
 create policy "profiles_select_own"
   on public.profiles for select
   to authenticated
   using (id = auth.uid() or public.get_my_role() = 'doctor');
 
+drop policy if exists "profiles_update_own" on public.profiles;
 create policy "profiles_update_own"
   on public.profiles for update
   to authenticated
@@ -118,36 +99,33 @@ create policy "profiles_update_own"
     and role is not distinct from (select role from public.profiles where id = auth.uid())
   );
 
--- ---------- PATIENTS ----------
-alter table public.patients enable row level security;
-
--- Alunos e médicos podem listar pacientes (fluxo compartilhado da feira).
+-- PATIENTS
+drop policy if exists "patients_select_all" on public.patients;
 create policy "patients_select_all"
   on public.patients for select
   to authenticated
   using (true);
 
--- Somente alunos inserem pacientes.
+drop policy if exists "patients_insert_student" on public.patients;
 create policy "patients_insert_student"
   on public.patients for insert
   to authenticated
   with check (public.get_my_role() = 'student');
 
--- ---------- MEDICAL_RECORDS ----------
-alter table public.medical_records enable row level security;
-
--- Leitura: aluno lê os próprios registros; médico lê todos.
+-- MEDICAL_RECORDS
+drop policy if exists "records_select_student_own" on public.medical_records;
 create policy "records_select_student_own"
   on public.medical_records for select
   to authenticated
   using (public.get_my_role() = 'student' and student_id = auth.uid());
 
+drop policy if exists "records_select_doctor_all" on public.medical_records;
 create policy "records_select_doctor_all"
   on public.medical_records for select
   to authenticated
   using (public.get_my_role() = 'doctor');
 
--- Inserção: somente aluno, registro próprio e sempre 'pending'.
+drop policy if exists "records_insert_student_pending" on public.medical_records;
 create policy "records_insert_student_pending"
   on public.medical_records for insert
   to authenticated
@@ -158,27 +136,23 @@ create policy "records_insert_student_pending"
     and status = 'pending'
   );
 
--- Edição: aluno edita apenas prontuários em rascunho ('draft') próprios.
--- Pode salvar mantendo 'draft' ou reenviar para 'pending' (chamar o preceptor).
--- Um prontuário 'pending' (já chamado) NÃO pode ser editado diretamente;
--- o aluno precisa cancelar o chamado (função student_cancel_pending) primeiro.
-create policy "records_update_student_draft"
+drop policy if exists "records_update_student_pending" on public.medical_records;
+create policy "records_update_student_pending"
   on public.medical_records for update
   to authenticated
   using (
     public.get_my_role() = 'student'
     and student_id = auth.uid()
-    and status = 'draft'
+    and status = 'pending'
   )
   with check (
     public.get_my_role() = 'student'
     and student_id = auth.uid()
     and doctor_id is null
-    and status in ('draft', 'pending')
+    and status = 'pending'
   );
 
--- Edição: médico atualiza registros; o resultado deve estar 'completed'
--- com um plano de conduta preenchido.
+drop policy if exists "records_update_doctor_complete" on public.medical_records;
 create policy "records_update_doctor_complete"
   on public.medical_records for update
   to authenticated
@@ -190,47 +164,16 @@ create policy "records_update_doctor_complete"
     and length(trim(management_plan)) > 0
   );
 
--- ============================================================
--- Função SECURITY DEFINER: aluno cancela o chamado do preceptor
--- Remove o prontuário 'pending' do fluxo do preceptor, voltando
--- para 'draft' (rascunho) para edição. Apenas o próprio aluno pode.
--- ============================================================
-create or replace function public.student_cancel_pending(record_id uuid)
-returns void
-language sql
-security definer
-set search_path = public
-as $$
-  update public.medical_records
-  set status = 'draft'
-  where id = record_id
-    and student_id = auth.uid()
-    and doctor_id is null
-    and status = 'pending';
-$$;
-
--- ============================================================
 -- Função SECURITY DEFINER: finalização estrita pelo médico
--- O RLS é por linha; para restringir a ÚNICOS colunas
--- (management_plan e status), usa-se função security definer
--- (padrão Supabase). O médico não pode alterar outras colunas.
--- ============================================================
 create or replace function public.doctor_complete_record(
   record_id uuid,
   plan_text text
 )
 returns void
-language plpgsql
+language sql
 security definer
 set search_path = public
 as $$
-declare
-  updated_rows int;
-begin
-  if plan_text is null or length(trim(plan_text)) = 0 then
-    raise exception 'O plano de conduta é obrigatório.';
-  end if;
-
   update public.medical_records
   set management_plan = plan_text,
       status = 'completed',
@@ -241,18 +184,9 @@ begin
       where id = auth.uid() and role = 'doctor'
     )
     and status = 'pending';
-
-  get diagnostics updated_rows = row_count;
-
-  if updated_rows = 0 then
-    raise exception 'Atendimento indisponível (foi cancelado ou já finalizado pelo preceptor).';
-  end if;
-end;
 $$;
 
--- ============================================================
--- GRANTS (Supabase: cliente autenticado)
--- ============================================================
+-- ---------- GRANTS ----------
 grant usage on schema public to authenticated;
 
 grant select, update on public.profiles to authenticated;
@@ -260,5 +194,4 @@ grant select, insert on public.patients to authenticated;
 grant select, insert, update on public.medical_records to authenticated;
 
 grant execute on function public.get_my_role() to authenticated;
-grant execute on function public.student_cancel_pending(uuid) to authenticated;
 grant execute on function public.doctor_complete_record(uuid, text) to authenticated;

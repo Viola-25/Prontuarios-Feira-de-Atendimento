@@ -1,9 +1,14 @@
 import { createClient } from "@/utils/supabase/server";
+import {
+  cardClass,
+  formatCpf,
+  pageSubtitleClass,
+  pageTitleClass,
+} from "@/components/field-classes";
 import { ClipboardList } from "lucide-react";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { formatCpf } from "@/components/field-classes";
 
 export default async function DoctorDashboard() {
   const cookieStore = await cookies();
@@ -16,6 +21,21 @@ export default async function DoctorDashboard() {
   if (!user) {
     redirect("/");
   }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("full_name")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const doctorName = profile?.full_name ?? "Médico";
+
+  const initials = doctorName
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part: string) => part[0]!.toUpperCase())
+    .join("");
 
   const { data, error } = await supabase
     .from("medical_records")
@@ -34,56 +54,66 @@ export default async function DoctorDashboard() {
   }> | null;
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:py-8">
-      <h1 className="text-xl font-semibold text-gray-900">
-        Dashboard do Médico
-      </h1>
-      <p className="mb-6 mt-1 text-sm text-gray-600">
+    <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:py-10">
+      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200/80 bg-white p-3 shadow-sm shadow-slate-200/50 sm:gap-4 sm:p-4">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-teal-600 text-sm font-bold text-white">
+          {initials}
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-base font-semibold text-slate-900">
+            {doctorName}
+          </p>
+          <p className="text-xs text-slate-500">Médico preceptor</p>
+        </div>
+      </div>
+
+      <h1 className={`${pageTitleClass} mt-6`}>Dashboard do Médico</h1>
+      <p className={pageSubtitleClass}>
         Atendimentos aguardando revisão e finalização.
       </p>
 
       {error && (
         <p
           role="alert"
-          className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+          className="mt-6 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700"
         >
           Erro ao carregar os atendimentos. Tente novamente.
         </p>
       )}
 
       {!error && (!records || records.length === 0) && (
-        <div className="rounded-lg border border-gray-200 bg-white p-8 text-center">
-          <ClipboardList className="mx-auto h-8 w-8 text-gray-300" />
-          <p className="mt-2 text-sm text-gray-600">
+        <div className={`${cardClass} mt-6 p-8 text-center`}>
+          <ClipboardList className="mx-auto h-10 w-10 text-teal-300" />
+          <p className="mt-3 text-sm text-slate-500">
             Nenhum atendimento pendente no momento.
           </p>
         </div>
       )}
 
       {records && records.length > 0 && (
-        <ul className="grid gap-3 sm:grid-cols-2">
+        <ul className="mt-6 grid gap-3 sm:grid-cols-2">
           {records.map((record) => (
             <li key={record.id}>
               <Link
                 href={`/doctor/record/${record.id}`}
-                className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition-colors hover:border-teal-300 hover:bg-teal-50"
+                className="group flex items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm shadow-slate-200/50 transition hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-md"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-base font-medium text-gray-900">
+                  <p className="truncate text-base font-semibold text-slate-900">
                     {record.patients?.name ?? "Paciente sem nome"}
                   </p>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-slate-500">
                     {record.patients?.document_id
                       ? formatCpf(record.patients.document_id)
                       : "Sem documento"}
                   </p>
-                  <p className="mt-1 text-xs text-gray-500">
+                  <p className="mt-1 text-xs text-slate-400">
                     Aluno: {record.profiles?.full_name ?? "—"}
                   </p>
                 </div>
                 <span
                   aria-hidden="true"
-                  className="shrink-0 text-lg text-gray-400"
+                  className="shrink-0 text-xl text-slate-300 transition group-hover:text-teal-500"
                 >
                   ›
                 </span>
